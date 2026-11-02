@@ -1,13 +1,21 @@
 const $ = (selector) => document.querySelector(selector);
 const savedMargin = Number.parseInt(localStorage.getItem('profitMargin') || '30', 10);
+const savedRate = Number.parseFloat(localStorage.getItem('bcvRate') || '');
 const state = {
   query: '',
   timer: null,
   pinConfigured: true,
-  margin: Number.isFinite(savedMargin) && savedMargin >= 0 && savedMargin <= 100 ? savedMargin : 30,
+  margin: Number.isFinite(savedMargin) && savedMargin >= 0 && savedMargin <= 200 ? savedMargin : 30,
+  rate: Number.isFinite(savedRate) && savedRate > 0 ? savedRate : null,
+  hideCost: localStorage.getItem('hideCost') === '1',
   items: []
 };
 const money = new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+const bolivar = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function bolivarPrice(usd) {
+  return state.rate ? `Bs. ${bolivar.format(usd * state.rate)}` : '';
+}
 const number = new Intl.NumberFormat('es-VE', { maximumFractionDigits: 2 });
 
 function escapeHtml(value) {
@@ -44,7 +52,7 @@ function productRow(item) {
     <td><span class="code">${escapeHtml(item.code)}</span></td>
     <td><span class="stock ${out ? 'out' : ''}">${out ? 'Agotado' : number.format(item.stock)}</span></td>
     <td class="cost-value">${money.format(item.cost)}</td>
-    <td class="sale-price">${money.format(sale)}</td>
+    <td class="sale-price">${money.format(sale)}${state.rate ? `<div>${bolivarPrice(sale)}</div>` : ''}</td>
   </tr>`;
 }
 
@@ -52,8 +60,8 @@ function productCard(item) {
   const out = item.stock <= 0;
   const sale = item.cost * (1 + state.margin / 100);
   return `<article class="card">
-    <div class="card-top"><h3>${escapeHtml(item.description)}</h3><div class="sale-block"><span>Venta +${state.margin}%</span><strong>${money.format(sale)}</strong></div></div>
     <div class="cost-line"><span>Costo</span><strong>${money.format(item.cost)}</strong></div>
+    <div class="card-top"><h3>${escapeHtml(item.description)}</h3><div class="sale-block"><span>Venta +${state.margin}%</span><strong>${money.format(sale)}</strong>${state.rate ? `<strong>${bolivarPrice(sale)}</strong>` : ''}</div></div>
     <div class="card-bottom"><span class="code">${escapeHtml(item.code)}</span><span class="stock ${out ? 'out' : ''}">${out ? 'Agotado' : number.format(item.stock) + ' disp.'}</span></div>
   </article>`;
 }
@@ -63,16 +71,17 @@ function renderProducts() {
   $('#saleHeader').textContent = `Venta +${state.margin}%`;
   const slider = $('#marginSlider');
   slider.value = state.margin;
-  slider.style.setProperty('--range-progress', `${state.margin}%`);
+  slider.style.setProperty('--range-progress', `${state.margin / 2}%`);
   document.querySelectorAll('[data-margin]').forEach(button => {
     button.classList.toggle('active', Number(button.dataset.margin) === state.margin);
   });
+  $('#rateLabel').textContent = state.rate ? `BCV Bs. ${bolivar.format(state.rate)}` : 'Dólar BCV';
   $('#productRows').innerHTML = state.items.map(productRow).join('');
   $('#mobileCards').innerHTML = state.items.map(productCard).join('');
 }
 
 function setMargin(value) {
-  state.margin = Math.min(100, Math.max(0, Number(value)));
+  state.margin = Math.min(200, Math.max(0, Number(value)));
   localStorage.setItem('profitMargin', String(state.margin));
   renderProducts();
 }
@@ -108,6 +117,13 @@ async function loadProducts(query = '') {
 }
 
 $('#marginSlider').value = state.margin;
+$('#hideCost').checked = state.hideCost;
+document.body.classList.toggle('hide-cost', state.hideCost);
+$('#hideCost').addEventListener('change', event => {
+  state.hideCost = event.target.checked;
+  localStorage.setItem('hideCost', state.hideCost ? '1' : '0');
+  document.body.classList.toggle('hide-cost', state.hideCost);
+});
 $('#marginSlider').addEventListener('input', event => setMargin(event.target.value));
 document.querySelectorAll('[data-margin]').forEach(button => {
   button.addEventListener('click', () => setMargin(button.dataset.margin));
@@ -132,6 +148,39 @@ document.addEventListener('keydown', event => {
     $('#search').focus();
   }
   if (event.key === 'Escape' && $('#uploadDialog').open) $('#uploadDialog').close();
+  if (event.key === 'Escape' && $('#rateDialog').open) $('#rateDialog').close();
+});
+
+$('#openRate').addEventListener('click', () => {
+  $('#rateInput').value = state.rate ? bolivar.format(state.rate) : '';
+  $('#rateStatus').classList.add('hidden');
+  $('#rateDialog').showModal();
+  $('#rateInput').select();
+});
+$('#closeRate').addEventListener('click', () => $('#rateDialog').close());
+$('#rateDialog').addEventListener('click', event => {
+  if (event.target === $('#rateDialog')) $('#rateDialog').close();
+});
+
+$('#rateForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const raw = $('#rateInput').value.trim().replace(/\s/g, '');
+  if (!raw) {
+    state.rate = null;
+    localStorage.removeItem('bcvRate');
+  } else {
+    // Acepta formato venezolano: 1.234,56 o 36,50
+    const value = Number.parseFloat(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw);
+    if (!Number.isFinite(value) || value <= 0) {
+      $('#rateStatus').textContent = 'Escribe un número mayor que cero, por ejemplo 36,50.';
+      $('#rateStatus').classList.remove('hidden');
+      return;
+    }
+    state.rate = value;
+    localStorage.setItem('bcvRate', String(value));
+  }
+  $('#rateDialog').close();
+  renderProducts();
 });
 
 $('#openUpload').addEventListener('click', () => $('#uploadDialog').showModal());
