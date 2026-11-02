@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#163300">
+  <meta name="description" content="Visor de costos, existencias y cálculo de ganancia">
+  <title>Costos · Inventario</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Inicio">
+      <span class="brand-mark">V</span><span>Visor de precios</span>
+    </a>
+    <button id="openUpload" class="button button-dark" type="button">
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 14v5h14v-5"/></svg>
+      Actualizar lista
+    </button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="search-wrap">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="search" type="search" autocomplete="off" placeholder="Ej. bujía, casco, 2008-0003… (o *Negro para buscar solo en descripción)" aria-label="Buscar productos">
+        <kbd>⌘ K</kbd>
+      </div>
+
+      <div class="stats" aria-label="Resumen del inventario">
+        <div><strong id="statProducts">—</strong><span>Productos</span></div>
+        <div><strong id="statUnits">—</strong><span>Unidades</span></div>
+        <div><strong id="statDate">—</strong><span>Actualizado</span></div>
+      </div>
+
+      <div class="margin-panel">
+        <div class="margin-copy">
+          <span class="margin-label">PORCENTAJE DE GANANCIA</span>
+          <strong><output id="marginValue" for="marginSlider">30%</output></strong>
+
+        </div>
+        <div class="margin-control">
+          <input id="marginSlider" type="range" min="0" max="100" step="5" value="30" aria-label="Porcentaje de ganancia">
+          <div class="range-scale"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+          <div class="margin-presets" aria-label="Porcentajes rápidos">
+            <button type="button" data-margin="20">20%</button>
+            <button type="button" data-margin="30" class="active">30%</button>
+            <button type="button" data-margin="40">40%</button>
+            <button type="button" data-margin="50">50%</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="catalog" aria-live="polite">
+      <div class="catalog-head">
+        <div>
+          <h2 id="resultTitle">Todos los productos</h2>
+          <p id="resultMeta">Cargando inventario…</p>
+        </div>
+        <button id="clearSearch" class="button button-soft hidden" type="button">Limpiar búsqueda</button>
+      </div>
+
+      <div id="loading" class="state"><span class="spinner"></span> Cargando productos…</div>
+      <div id="empty" class="state hidden">
+        <div class="state-icon">⌕</div>
+        <h3>No encontramos coincidencias</h3>
+        <p>Prueba con otra palabra, modelo o código.</p>
+      </div>
+
+      <div id="desktopTable" class="table-shell hidden">
+        <table>
+          <thead><tr><th>Producto</th><th>Código</th><th>Existencia</th><th class="right">Costo</th><th class="right" id="saleHeader">Venta +30%</th></tr></thead>
+          <tbody id="productRows"></tbody>
+        </table>
+      </div>
+      <div id="mobileCards" class="cards hidden"></div>
+      <p id="limitNote" class="limit-note hidden"></p>
+    </section>
+  </main>
+
+
+  <dialog id="uploadDialog">
+    <form id="uploadForm" class="modal" method="dialog">
+      <button id="closeUpload" class="close" type="button" aria-label="Cerrar">×</button>
+      <div class="modal-icon">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 14v5h14v-5"/></svg>
+      </div>
+      <p class="eyebrow">ACTUALIZAR INVENTARIO</p>
+      <h2>Sube tu nueva lista</h2>
+      <p class="modal-copy">El archivo reemplazará el inventario actual. Debe ser <strong>.xlsx</strong> e incluir Código, Descripción, Existencia y Costo. La columna «Precio Total» del archivo original se interpreta como costo.</p>
+
+      <div id="pinSetup" class="setup hidden">
+        <label for="newPin">Crea tu clave de actualización</label>
+        <p>Solo se solicita la primera vez. Usa de 4 a 10 números.</p>
+        <input id="newPin" type="password" inputmode="numeric" pattern="[0-9]{4,10}" placeholder="Nueva clave" autocomplete="new-password">
+        <button id="savePin" class="button button-green wide" type="button">Guardar clave</button>
+      </div>
+
+      <div id="uploadFields">
+        <label class="file-drop" for="excelFile">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>
+          <strong id="fileLabel">Seleccionar archivo Excel</strong>
+          <span>Máximo 12 MB · formato .xlsx</span>
+        </label>
+        <input id="excelFile" name="file" type="file" accept=".xlsx" hidden required>
+        <label for="pin">Clave de actualización</label>
+        <input id="pin" name="pin" type="password" inputmode="numeric" placeholder="Ingresa tu clave" autocomplete="current-password" required>
+        <button id="uploadButton" class="button button-green wide" type="submit">Importar y publicar</button>
+      </div>
+      <div id="uploadStatus" class="notice hidden" role="status"></div>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
